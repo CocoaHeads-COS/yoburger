@@ -2,3 +2,7 @@
 /.build
 /Packages
 /*.xcodeproj
+server/Server.xcodeproj/
+
+#Hide Secret Keys 
+server/Sources/YoBurgerMain/config.swift

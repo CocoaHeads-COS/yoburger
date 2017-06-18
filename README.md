@@ -1,6 +1,8 @@
 # yoburger
 The home of the YoBurger SlackBot,  give and receive :hamburger: ‘s to promote mutual support in slack
 
+<img src="https://github.com/CocoaHeads-COS/yoburger/blob/master/docs/screenshot.png?raw=true" width=250/>
+
 ## Install and run yoburger locally on your Mac
 0. Install Xcode
 1. Clone the repo `git clone https://github.com/CocoaHeads-COS/yoburger.git`

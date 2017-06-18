@@ -29,8 +29,22 @@ class YoBurgerBot {
       }
       
       if messageSenderID != yoburgerID {
-        if message.uppercased().contains("DEBUG") {
-          self?.sendMessage(channel: channel, message: "Debug :)")
+        if message.uppercased().contains("LEADERBOARD") {
+          var leaderboard = [String]()
+          if let users = self?.users {
+            for user in users {
+              let count = user.value.history.count
+              leaderboard.append("[ \(count) ] @\(user.value.name)")
+            }
+          }
+          
+          var leaderboardText = leaderboard.sorted().reversed().joined(separator: "\n")
+          
+          if self?.users.count == 0 {
+            leaderboardText = "No :hamburger:s have been awarded. Come on guys!"
+          }
+          
+          self?.sendMessage(channel: channel, message: "*YoBurger :hamburger: Leaderboard*\n\(leaderboardText)")
           
         } else if message.uppercased().contains("BURGERHISTORY") && referrers.count > 0 {
           for referrer in referrers {

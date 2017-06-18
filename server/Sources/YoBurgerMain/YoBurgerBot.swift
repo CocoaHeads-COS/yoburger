@@ -2,81 +2,14 @@ import Foundation
 import SlackKit
 
 class YoBurgerBot {
-  
-  let verdicts: [String:Bool] = [
-    "Mr. Roboto" : false,
-    "Service Kiosks": false,
-    "Darth Vader": false,
-    "K-9": true,
-    "Emotions": false,
-    "Self-Driving Cars": false,
-    "Telepresence Robots": false,
-    "Roomba": true,
-    "Assembly-Line Robot": false,
-    "ASIMO": false,
-    "KITT": false,
-    "USS Enterprise": false,
-    "Transformers": true,
-    "Jaegers": false,
-    "The Major": false,
-    "Siri": false,
-    "The Terminator": true,
-    "Commander Data": false,
-    "Marvin the Paranoid Android": true,
-    "Pinocchio": false,
-    "Droids": true,
-    "Hitchbot": false,
-    "Mars Rovers": false,
-    "Space Probes": false,
-    "Sasquatch": false,
-    "Toaster": false,
-    "Toaster Oven": false,
-    "Cylons": false,
-    "V'ger": true,
-    "Ilia Robot": false,
-    "The TARDIS": false,
-    "Johnny 5": true,
-    "Twiki": true,
-    "Dr. Theopolis": false,
-    "robots.txt": false,
-    "Lobot": false,
-    "Vicki": true,
-    "GlaDOS": false,
-    "Turrets": true,
-    "Wheatley": true,
-    "Herbie the Love Bug": false,
-    "Iron Man": false,
-    "Ultron": false,
-    "The Vision": false,
-    "Clockwork Droids": false,
-    "Podcasts": false,
-    "Cars": false,
-    "Swimming Pool Cleaners": false,
-    "Burritos": false,
-    "Prince Robot IV": false,
-    "Daleks": false,
-    "Cybermen": false,
-    "The Internet of Things": false,
-    "Nanobots": true,
-    "Two Intermeshed Gears": false,
-    "Crow T. Robot": true,
-    "Tom Servo": true,
-    "Thomas and Friends": false,
-    "Replicants": false,
-    "Chatbots": false,
-    "Agents": false,
-    "Lego Simulated Worm Toy": true,
-    "Ghosts": false,
-    "Exos": true,
-    "Rasputin": false,
-    "Tamagotchi": false,
-    "T-1000": true,
-    "The Tin Woodman": false,
-    "Mic N. The Robot": true,
-    "Robot Or Not Bot": false
-  ]
-  
+
   let bot: SlackKit
+  
+  typealias YBUserID = String
+  typealias YBUserName = String
+  
+  var users = [YBUserID:YBUser]()
+  var allUsersInChannel = [YBUserID:YBUserName]()
   
   init(token: String) {
     bot = SlackKit()
@@ -84,46 +17,87 @@ class YoBurgerBot {
     bot.addWebAPIAccessWithToken(token)
     bot.notificationForEvent(.message) { [weak self] (event, client) in
       guard
-        let message = event.message,
-        let id = client?.authenticatedUser?.id,
-        message.text?.contains(id) == true
+        let message = event.message?.text,
+        let channel = event.message?.channel,
+        let yoburgerID = client?.authenticatedUser?.id,
+        let messageSenderID = event.message?.user,
+        self?.saveAllUserNamesInChannel(event: event, client: client) == true, //Generates username table
+        let username = self?.allUsersInChannel[messageSenderID],
+        let referrers = self?.getAllReferredUsersIn(message: message)
         else {
           return
       }
-      self?.handleMessage(message)
-    }
-  }
-  
-  init(clientID: String, clientSecret: String) {
-    bot = SlackKit()
-    let oauthConfig = OAuthConfig(clientID: clientID, clientSecret: clientSecret)
-    bot.addServer(oauth: oauthConfig)
-    bot.notificationForEvent(.message) { [weak self] (event, client) in
-      guard
-        let message = event.message,
-        let id = client?.authenticatedUser?.id,
-        message.text?.contains(id) == true
-        else {
-          return
-      }
-      self?.handleMessage(message)
-    }
-  }
-  
-  // MARK: Bot logic
-  private func handleMessage(_ message: Message) {
-    if let text = message.text?.lowercased(), let channel = message.channel {
-      for (robot, verdict) in verdicts {
-        let lowerbot = robot.lowercased()
-        if text.contains(lowerbot) {
-          let reaction = verdict ? "robot_face" : "no_entry_sign"
-          bot.webAPI?.addReaction(name: reaction, channel: channel, timestamp: message.ts, success: nil, failure: nil)
-          return
+      
+      if messageSenderID != yoburgerID {
+        
+        if message.uppercased().contains("BURGERHISTORY") && referrers.count > 0 {
+          for referrer in referrers {
+            let referrerName = self?.allUsersInChannel[referrer] ?? "Unknown"
+            let referrerCount = self?.users[referrer]?.history.count ?? 0
+            let messageToSend = "@\(referrerName) has \(referrerCount) :hamburger:s"
+            self?.bot.webAPI?.sendMessage(channel: channel, text: messageToSend, success: nil, failure: nil)
+          }
+          
+        } else {
+          
+          for user in referrers {
+            
+            //Add user to db if they don't already exist
+            if self?.users[user] == nil {
+              let username = self?.allUsersInChannel[user] ?? "Unknown"
+              let newUser = YBUser(name: username, id: user)
+              self?.users[user] = newUser
+            }
+            
+            //Add burger to sender's history
+            self?.saveBurgerInUsersHistory(userId: user, referrer: messageSenderID)
+          }
+          
+          //Send Message to Slack Channel
+          //Slack uses :hamburger: instead of emoji, so we check for both
+          if message.contains("🍔") || message.contains(":hamburger:") {
+            for user in referrers {
+              let refusername = self?.allUsersInChannel[user] ?? "Unknown"
+              let refburgercount = self?.users[user]?.history.count ?? 0
+              var ifplural = ""
+              if refburgercount > 1 {
+                ifplural = "s"
+              }
+              self?.bot.webAPI?.sendMessage(channel: channel, text: "Woot! @\(username) has given @\(refusername) a :hamburger:.\n@\(refusername) now has \(refburgercount) :hamburger:\(ifplural)", success: nil, failure: nil)
+            }
+          }
+          //Debug Log
+          print("Message from \(username): \(message)")
         }
       }
-      // Not found
-      bot.webAPI?.addReaction(name: "question", channel: channel, timestamp: message.ts, success: nil, failure: nil)
-      return
     }
   }
+  
+  func saveAllUserNamesInChannel(event:Event, client:Client?) -> Bool {
+    guard let client = client else {return false}
+  
+    for user in client.users {
+      if let id = user.value.id {
+        allUsersInChannel[id] = user.value.name
+      }
+    }
+    return true //Succeeded
+  }
+  
+  func getAllReferredUsersIn(message:String) -> [YBUserID] {
+    var referredUsers = [YBUserID]()
+    for (id, _) in allUsersInChannel {
+      if message.contains(id) {
+        referredUsers.append(id)
+      }
+    }
+    return referredUsers
+  }
+  
+  func saveBurgerInUsersHistory(userId: YBUserID, referrer: YBUserID) {
+    let newHistory = YBHistory(userid: userId, date: Date(), referrer: referrer)
+    print("Adding burger to \(userId) from \(referrer)")
+    users[userId]?.history.append(newHistory)
+  }
+  
 }
